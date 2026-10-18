@@ -117,7 +117,11 @@ export default function Dashboard() {
           <div className="dash-subtitle">Live drive times to 10 Colorado resorts</div>
         </div>
         <div className="header-actions">
-          {data && <span className="updated">Updated {timeAgo(data.fetchedAt, now)}</span>}
+          {data && (
+            <span className="updated">
+              <span className="live-dot" /> Updated {timeAgo(data.fetchedAt, now)}
+            </span>
+          )}
           <button
             className="btn btn-secondary"
             onClick={() => fetchCommutes(address)}

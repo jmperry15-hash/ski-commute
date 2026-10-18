@@ -41,7 +41,7 @@ export default function ResortMap({ origin, resorts, selectedId, onSelect }: Pro
     <GoogleMap
       className="map"
       mapId="DEMO_MAP_ID" // required for AdvancedMarker; free to use
-      colorScheme={ColorScheme.DARK}
+      colorScheme={ColorScheme.LIGHT}
       defaultCenter={{ lat: 39.7, lng: -106.1 }}
       defaultZoom={8}
       gestureHandling="cooperative" // on phones: two fingers to pan, so the page still scrolls
