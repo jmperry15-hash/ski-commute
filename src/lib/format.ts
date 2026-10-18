@@ -11,12 +11,12 @@ export function formatMiles(meters: number) {
   return `${Math.round(meters / 1609.34)} mi`;
 }
 
-// Traffic delay → a label + color class for the badge.
+// Traffic delay → a ski-trail rating: green circle (light), blue square (moderate), black diamond (heavy).
 export function delayLevel(delaySec: number) {
   const mins = delaySec / 60;
   if (mins < 5) return { label: "Light", tone: "green" } as const;
-  if (mins < 15) return { label: "Moderate", tone: "amber" } as const;
-  return { label: "Heavy", tone: "red" } as const;
+  if (mins < 15) return { label: "Moderate", tone: "blue" } as const;
+  return { label: "Heavy", tone: "black" } as const;
 }
 
 export function timeAgo(iso: string, now: number) {

@@ -5,6 +5,7 @@ export type ResortCommute = {
   id: string;
   name: string;
   region: string;
+  summitFt?: number; // optional: results saved by older versions don't have it
   lat: number;
   lng: number;
   ok: boolean; // false if Google couldn't find a driving route
