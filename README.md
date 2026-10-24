@@ -85,6 +85,16 @@ What comes back is one entry per resort:
 - **Field mask:** This header is required. It tells Google exactly which fields to return. Smaller responses are faster, and some fields cost more.
 - **`TRAFFIC_AWARE_OPTIMAL`:** Uses live and historical traffic, the same quality as the Google Maps app. With no `departureTime`, Google assumes "leaving now."
 
+### Traffic-colored route lines
+
+Tap a resort and the map draws your actual route to it. Each stretch is colored by live traffic, like Google Maps: **blue** means moving normally, **orange** means slow, and **red** means jammed.
+
+This uses a second Routes API method, `computeRoutes`, with `extraComputations: ["TRAFFIC_ON_POLYLINE"]`. Google returns the road shape as an encoded polyline plus a list of `speedReadingIntervals`, each saying "points 120–188 are SLOW". The server ([`src/lib/google.ts`](src/lib/google.ts)) decodes the line, cuts it into those colored pieces, and the map draws them.
+
+Traffic on route lines is billed at Google's **Enterprise** level, which includes 1,000 free requests a month. That's why routes only load when you tap a resort.
+
+Google's API doesn't include the accident and closure icons you see in the Google Maps app. Their effect still shows up here, as orange or red stretches.
+
 ### How the app avoids wasting API calls
 
 - **One request for all 10 resorts**, not 10 separate requests.
@@ -93,6 +103,7 @@ What comes back is one entry per resort:
 - **Server cache:** a repeat request for the same address within 2 minutes reuses the previous answer.
 - **Refresh cooldown:** after a refresh, the button stays disabled for 30 seconds.
 - **The Directions ↗ links** just open Google Maps. They cost nothing.
+- **Route lines load only when you tap a resort.** Each route is reused for 5 minutes, so tapping back and forth is free.
 - **Address suggestions** wait until you've typed 3 characters and paused briefly.
 
 ### Where the files are
@@ -103,7 +114,8 @@ src/
 │  ├─ page.tsx               the home page (just renders <Dashboard/>)
 │  ├─ layout.tsx             fonts, page title
 │  ├─ globals.css            all styling (dark theme + mobile rules at the bottom)
-│  └─ api/commute/route.ts   ★ the server endpoint (secret key used here)
+│  ├─ api/commute/route.ts   ★ drive times to all 10 resorts (secret key used here)
+│  └─ api/route/route.ts     the road path to ONE resort, colored by traffic
 ├─ components/
 │  ├─ Dashboard.tsx          refresh, stats, resort cards (loads Google's script once)
 │  ├─ AddressInput.tsx       address box with suggestions as you type
@@ -310,6 +322,7 @@ Google Maps Platform gives a free monthly allowance **per API**:
 | Address lookup | Geocoding (Essentials) | 10,000 requests | 1 per refresh |
 | Interactive map | Dynamic Maps (Essentials) | 10,000 loads | 1 per page open |
 | Address suggestions | Autocomplete Session Usage + Place Details Essentials | Unlimited sessions + 10,000 details | 1 per address you pick |
+| Traffic-colored route line | Routes: Compute Routes **Enterprise** | 1,000 requests | 1 per resort you tap (cached 5 min) |
 
 Suggestions use a **session token**. All the keystrokes for one address count as a single session, which is free. Only the final pick counts toward the 10,000-a-month details allowance. The app also waits a quarter-second after you stop typing before asking Google.
 

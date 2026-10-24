@@ -2,10 +2,11 @@
 // fail if this file is ever imported into browser code, so the API key can't leak.
 import "server-only";
 import { RESORTS } from "./resorts";
-import type { ResortCommute } from "./types";
+import type { ResortCommute, RouteSegment, TrafficSpeed } from "./types";
 
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const ROUTE_MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
+const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
 export class GoogleApiError extends Error {
   constructor(message: string, public httpStatus = 502) {
@@ -96,6 +97,97 @@ export async function computeCommutes(origin: { lat: number; lng: number }, apiK
       distanceMeters: ok ? el?.distanceMeters ?? 0 : 0,
     };
   });
+}
+
+// Step 3 (only when you tap a resort): get the actual road path to ONE resort,
+// with traffic speed for each stretch of road. Billed as 1 "Compute Routes Enterprise"
+// request (traffic-on-polyline is an Enterprise feature; 1,000 free per month).
+export async function computeTrafficRoute(origin: { lat: number; lng: number }, resortId: string, apiKey: string) {
+  const resort = RESORTS.find((r) => r.id === resortId);
+  if (!resort) throw new GoogleApiError("Unknown resort.", 400);
+
+  const res = await fetch(ROUTES_URL, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.travelAdvisory.speedReadingIntervals",
+    },
+    body: JSON.stringify({
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+      destination: { location: { latLng: { latitude: resort.lat, longitude: resort.lng } } },
+      travelMode: "DRIVE",
+      routingPreference: "TRAFFIC_AWARE_OPTIMAL",
+      extraComputations: ["TRAFFIC_ON_POLYLINE"], // ← asks for traffic speed along the line
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    console.error("Routes API (computeRoutes) error:", JSON.stringify(data));
+    throw new GoogleApiError(data?.error?.message ?? "Route request failed.");
+  }
+  const route = data.routes?.[0];
+  if (!route) throw new GoogleApiError("No driving route found.", 404);
+
+  const points = decodePolyline(route.polyline.encodedPolyline);
+  type Interval = { startPolylinePointIndex?: number; endPolylinePointIndex?: number; speed?: TrafficSpeed };
+  const intervals: Interval[] = route.travelAdvisory?.speedReadingIntervals ?? [];
+
+  // Cut the line into pieces, one per traffic interval. Each piece includes its end point
+  // so the colored pieces join up without gaps. No traffic data → one "normal" piece.
+  const segments: RouteSegment[] = intervals.length
+    ? intervals.map((iv) => ({
+        speed: iv.speed ?? "NORMAL",
+        path: points.slice(iv.startPolylinePointIndex ?? 0, (iv.endPolylinePointIndex ?? points.length - 1) + 1),
+      }))
+    : [{ speed: "NORMAL", path: points }];
+
+  return {
+    resortId,
+    segments: mergeSegments(segments),
+    durationSec: parseInt(String(route.duration ?? "0").replace("s", ""), 10),
+    distanceMeters: route.distanceMeters ?? 0,
+  };
+}
+
+// Join neighbouring pieces that have the same speed, so the map draws fewer lines.
+function mergeSegments(segments: RouteSegment[]) {
+  const out: RouteSegment[] = [];
+  for (const seg of segments) {
+    const last = out[out.length - 1];
+    if (last && last.speed === seg.speed) last.path.push(...seg.path.slice(1));
+    else out.push({ speed: seg.speed, path: [...seg.path] });
+  }
+  return out;
+}
+
+// Google sends the route shape as an "encoded polyline": a compact text format for a
+// list of coordinates. This is Google's published decoding algorithm.
+function decodePolyline(encoded: string) {
+  const points: { lat: number; lng: number }[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    for (const axis of ["lat", "lng"] as const) {
+      let result = 0;
+      let shift = 0;
+      let byte: number;
+      do {
+        byte = encoded.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const delta = result & 1 ? ~(result >> 1) : result >> 1;
+      if (axis === "lat") lat += delta;
+      else lng += delta;
+    }
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
 }
 
 // Fastest first; resorts with no route go to the bottom.

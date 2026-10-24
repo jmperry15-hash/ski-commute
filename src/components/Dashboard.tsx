@@ -1,20 +1,21 @@
 "use client";
 // The main dashboard. Runs in the browser: it holds the address you typed,
 // calls our own /api/commute endpoint, and renders the results + map.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import AddressInput from "./AddressInput";
 import Mountains from "./Mountains";
-import ResortMap from "./ResortMap";
+import ResortMap, { type RouteState } from "./ResortMap";
 import { BROWSER_KEY } from "@/lib/config";
 import { RESORTS } from "@/lib/resorts";
-import type { CommuteResponse, ResortCommute } from "@/lib/types";
+import type { CommuteResponse, ResortCommute, TrafficRoute } from "@/lib/types";
 import { delayLevel, formatDuration, formatMiles, timeAgo } from "@/lib/format";
 
 const ADDRESS_KEY = "skiCommute.address";
 const LAST_RESULT_KEY = "skiCommute.lastResult";
 const REUSE_SAVED_MS = 10 * 60 * 1000; // on page load, reuse results younger than 10 min
 const REFRESH_COOLDOWN_MS = 30 * 1000; // stop accidental rapid-fire refresh clicks
+const ROUTE_REUSE_MS = 5 * 60 * 1000; // re-tapping a resort within 5 min reuses its route (free)
 
 // localStorage can throw (private browsing, blocked storage), so wrap it.
 function load<T>(key: string): T | null {
@@ -40,6 +41,40 @@ export default function Dashboard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState(0);
   const [now, setNow] = useState(0); // current time; set in the browser (the server pre-renders without a clock)
+  const [routeState, setRouteState] = useState<RouteState>({ status: "idle" });
+  const routeCache = useRef(new Map<string, { at: number; route: TrafficRoute }>());
+  const latestRouteRequest = useRef(0);
+  const selectedRef = useRef<string | null>(null);
+  const originRef = useRef<{ lat: number; lng: number } | null>(null);
+  const mapRef = useRef<HTMLElement>(null);
+
+  // Load the traffic-colored route to one resort (only when you tap it).
+  const loadRoute = useCallback(async (origin: { lat: number; lng: number }, resortId: string, force = false) => {
+    const resortName = RESORTS.find((r) => r.id === resortId)?.name ?? "resort";
+    const key = `${origin.lat},${origin.lng},${resortId}`;
+    const cached = routeCache.current.get(key);
+    if (!force && cached && Date.now() - cached.at < ROUTE_REUSE_MS) {
+      setRouteState({ status: "ready", resortName, route: cached.route });
+      return;
+    }
+    const requestId = ++latestRouteRequest.current;
+    setRouteState({ status: "loading", resortName });
+    try {
+      const res = await fetch("/api/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: origin.lat, lng: origin.lng, resortId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Couldn't load the route");
+      routeCache.current.set(key, { at: Date.now(), route: json });
+      if (requestId === latestRouteRequest.current) setRouteState({ status: "ready", resortName, route: json });
+    } catch (e) {
+      if (requestId === latestRouteRequest.current) {
+        setRouteState({ status: "error", message: e instanceof Error ? e.message : "Couldn't load the route" });
+      }
+    }
+  }, []);
 
   // Tick once a second so "updated 3 min ago" and the cooldown stay current.
   useEffect(() => {
@@ -62,6 +97,15 @@ export default function Dashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Request failed");
       setNow(Date.now());
+      const sameOrigin = originRef.current?.lat === json.origin.lat && originRef.current?.lng === json.origin.lng;
+      originRef.current = json.origin;
+      if (sameOrigin && selectedRef.current && !json.demo) {
+        loadRoute(json.origin, selectedRef.current, true); // Refresh also refreshes the route you're viewing
+      } else if (!sameOrigin) {
+        selectedRef.current = null;
+        setSelectedId(null);
+        setRouteState({ status: "idle" });
+      }
       setData(json);
       setAddress(addr);
       save(ADDRESS_KEY, addr);
@@ -71,7 +115,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadRoute]);
 
   // On first load: restore your saved address. If the saved results are fresh,
   // show them without calling Google at all; otherwise fetch once.
@@ -86,12 +130,25 @@ export default function Dashboard() {
     const fresh = last && last.address === savedAddress && Date.now() - new Date(last.data.fetchedAt).getTime() < REUSE_SAVED_MS;
     if (fresh) {
       setNow(Date.now());
+      originRef.current = last.data.origin;
       setData(last.data);
       setAddress(savedAddress);
     } else {
       fetchCommutes(savedAddress);
     }
   }, [fetchCommutes]);
+
+  const selectResort = (id: string, fromList = false) => {
+    selectedRef.current = id;
+    setSelectedId(id);
+    // On phones/tablets the map sits above the list, so bring it into view to show the route.
+    if (fromList && window.matchMedia("(max-width: 1024px)").matches) {
+      mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (!data) return;
+    if (data.demo) setRouteState({ status: "error", message: "Route lines need your Google API key (demo mode)" });
+    else loadRoute(data.origin, id);
+  };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,12 +238,13 @@ export default function Dashboard() {
         {routed.length > 0 && <KpiRow results={routed} />}
 
         <div className="content-grid">
-          <section className="card map-card" aria-label="Map of resorts">
+          <section className="card map-card" aria-label="Map of resorts" ref={mapRef}>
             <ResortMap
               origin={data?.origin}
               resorts={mapPoints}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={selectResort}
+              routeState={routeState}
             />
           </section>
 
@@ -214,7 +272,7 @@ export default function Dashboard() {
                 origin={data!.origin}
                 selected={r.id === selectedId}
                 dim={loading}
-                onSelect={() => setSelectedId(r.id)}
+                onSelect={() => selectResort(r.id, true)}
               />
             ))}
           </section>

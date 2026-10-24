@@ -769,6 +769,69 @@ code {
   height: calc(100vh - 108px);
   min-height: 560px;
 }
+/* Route status + legend, floating in the map's bottom-left corner */
+.route-panel {
+  position: absolute;
+  left: 12px;
+  bottom: 28px;
+  z-index: 5;
+  max-width: calc(100% - 80px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(6, 11, 20, 0.85);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.8);
+  font-size: 12px;
+}
+.route-hint {
+  color: var(--text-secondary);
+}
+.route-error {
+  color: #fecaca;
+}
+.route-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.route-meta {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ice);
+}
+.route-summary {
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+.route-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+.route-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.route-legend i {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+.map-card {
+  scroll-margin-top: 72px; /* stop below the sticky top bar when scrolled into view */
+}
 .card.map-card {
   padding: 0;
 }
@@ -820,6 +883,22 @@ code {
 }
 .pin-selected .pin-time {
   color: #04111f;
+}
+/* Small rank dot used for the other resorts while a route is showing */
+.pin-dot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0b1424;
+  border: 1px solid rgba(186, 214, 255, 0.35);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 .pin-home {
   width: 32px;
@@ -904,7 +983,7 @@ div.empty-icon {
   }
   .map-card {
     order: 0; /* map above the list */
-    position: static;
+    position: relative;
     height: 560px;
     min-height: 0;
   }

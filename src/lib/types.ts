@@ -21,3 +21,16 @@ export type CommuteResponse = {
   fetchedAt: string; // ISO timestamp of when Google was actually called
   demo: boolean; // true when no API key is configured and sample data is shown
 };
+
+// One stretch of road on a route, colored by how fast traffic is moving.
+export type TrafficSpeed = "NORMAL" | "SLOW" | "TRAFFIC_JAM";
+export type RouteSegment = { speed: TrafficSpeed; path: { lat: number; lng: number }[] };
+
+// What /api/route sends back: the road path to one resort, split into traffic segments.
+export type TrafficRoute = {
+  resortId: string;
+  segments: RouteSegment[];
+  durationSec: number;
+  distanceMeters: number;
+  fetchedAt: string;
+};
