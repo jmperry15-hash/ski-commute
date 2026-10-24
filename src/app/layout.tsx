@@ -9,6 +9,8 @@ const display = Barlow_Condensed({ variable: "--font-barlow", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Ski Commute",
   description: "Live drive times from home to 10 Colorado ski resorts.",
+  // iPhone home-screen app: opens full-screen, with a dark status bar to match the page.
+  appleWebApp: { capable: true, title: "Ski Commute", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {
