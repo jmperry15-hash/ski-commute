@@ -9,7 +9,7 @@ import ResortMap, { type RouteState } from "./ResortMap";
 import { BROWSER_KEY } from "@/lib/config";
 import { RESORTS } from "@/lib/resorts";
 import type { CommuteResponse, ResortCommute, TrafficRoute } from "@/lib/types";
-import { delayLevel, formatDuration, formatMiles, timeAgo } from "@/lib/format";
+import { congestedMiles, congestionText, delayLevel, formatDuration, formatMiles, timeAgo } from "@/lib/format";
 
 const ADDRESS_KEY = "skiCommute.address";
 const LAST_RESULT_KEY = "skiCommute.lastResult";
@@ -166,6 +166,11 @@ export default function Dashboard() {
     : RESORTS;
 
   const maxDuration = Math.max(1, ...routed.map((r) => r.durationSec));
+  // Real congestion on the route you tapped (from the colored route line), shown on that card too.
+  const routeCongestion =
+    routeState.status === "ready"
+      ? { resortId: routeState.route.resortId, ...congestedMiles(routeState.route) }
+      : null;
 
   const page = (
     <div className="page">
@@ -271,6 +276,7 @@ export default function Dashboard() {
                 maxDuration={maxDuration}
                 origin={data!.origin}
                 selected={r.id === selectedId}
+                congestion={routeCongestion?.resortId === r.id ? routeCongestion : null}
                 dim={loading}
                 onSelect={() => selectResort(r.id, true)}
               />
@@ -312,7 +318,8 @@ function TrailIcon({ tone }: { tone: "green" | "blue" | "black" }) {
 
 function TrailLegend() {
   return (
-    <div className="legend" aria-label="Traffic legend">
+    <div className="legend" aria-label="Traffic compared with usual">
+      <span className="legend-title">vs usual</span>
       <span>
         <TrailIcon tone="green" /> Light
       </span>
@@ -342,18 +349,20 @@ function KpiRow({ results }: { results: ResortCommute[] }) {
         </div>
       </div>
       <div className="ticket">
-        <div className="kpi-label">Avg traffic delay</div>
+        <div className="kpi-label">Avg delay vs usual</div>
         <div className="kpi-value">
           +{formatDuration(avgDelay)} <TrailIcon tone={avgLevel.tone} />
         </div>
-        <div className="kpi-sub">{avgLevel.label} across {results.length} resorts</div>
+        <div className="kpi-sub">
+          {avgDelay < 60 ? "Traffic is typical for this time" : `${avgLevel.label}, across ${results.length} resorts`}
+        </div>
       </div>
       <div className="ticket">
-        <div className="kpi-label">Worst traffic</div>
+        <div className="kpi-label">Biggest delay vs usual</div>
         <div className="kpi-value">
           +{formatDuration(worst.delaySec)} <TrailIcon tone={worstLevel.tone} />
         </div>
-        <div className="kpi-sub">{worst.delaySec >= 60 ? worst.name : "No delays right now"}</div>
+        <div className="kpi-sub">{worst.delaySec >= 60 ? worst.name : "No resort slower than usual"}</div>
       </div>
     </div>
   );
@@ -365,6 +374,7 @@ function ResortCard({
   maxDuration,
   origin,
   selected,
+  congestion,
   dim,
   onSelect,
 }: {
@@ -373,6 +383,7 @@ function ResortCard({
   maxDuration: number;
   origin: { lat: number; lng: number };
   selected: boolean;
+  congestion: { slowMi: number; jammedMi: number } | null;
   dim: boolean;
   onSelect: () => void;
 }) {
@@ -415,12 +426,13 @@ function ResortCard({
           <span>{summitFt.toLocaleString()} ft</span>
           <span>{formatMiles(r.distanceMeters)}</span>
           <span className="meta-normal">
-            Normal <strong>{formatDuration(r.staticDurationSec)}</strong>
+            Usual <strong>{formatDuration(r.staticDurationSec)}</strong>
           </span>
           <span className={`traffic traffic-${level.tone}`}>
             <TrailIcon tone={level.tone} /> {trafficText(r)}
           </span>
         </div>
+        {congestion && <CongestionLine congestion={congestion} />}
         <div className="drive-bar" aria-hidden>
           <span className="drive-normal" style={{ width: `${normalPct}%` }} />
           <span className="drive-delay" style={{ width: `${delayPct}%` }} />
@@ -436,12 +448,25 @@ function ResortCard({
   );
 }
 
-// Plain-English traffic summary for a card.
+// Plain-English summary for a card. Google's "usual" time already includes the traffic
+// that's normal for this hour (e.g. rush hour), so this compares today with a typical day.
+// It does NOT mean the roads are empty: see the route line for actual slow stretches.
 function trafficText(r: ResortCommute) {
   const diffMin = Math.round((r.durationSec - r.staticDurationSec) / 60);
   if (diffMin <= -2) return `${-diffMin}m faster than usual`;
-  if (diffMin < 1) return "Clear roads";
-  return `+${formatDuration(r.delaySec)} ${delayLevel(r.delaySec).label.toLowerCase()} traffic`;
+  if (diffMin < 2) return "Typical for this time";
+  return `+${formatDuration(r.delaySec)} slower than usual`;
+}
+
+// Actual slow/jammed road on this resort's route (only after you tap it and the route loads).
+function CongestionLine({ congestion }: { congestion: { slowMi: number; jammedMi: number } }) {
+  const text = congestionText(congestion);
+  const tone = !text ? "clear" : congestion.jammedMi >= 0.1 ? "jam" : "slow";
+  return (
+    <div className={`congestion congestion-${tone}`}>
+      {text ? `On the road now: ${text}` : "On the road now: no slowdowns"}
+    </div>
+  );
 }
 
 function SkeletonList() {

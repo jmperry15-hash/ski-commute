@@ -10,8 +10,8 @@ export type ResortCommute = {
   lng: number;
   ok: boolean; // false if Google couldn't find a driving route
   durationSec: number; // drive time WITH current traffic
-  staticDurationSec: number; // "normal" drive time with no traffic
-  delaySec: number; // durationSec - staticDurationSec (never negative)
+  staticDurationSec: number; // Google's "usual" time for this hour (includes typical rush-hour traffic)
+  delaySec: number; // durationSec - staticDurationSec: how much slower than usual (never negative)
   distanceMeters: number;
 };
 

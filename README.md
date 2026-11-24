@@ -78,9 +78,11 @@ What comes back is one entry per resort:
 | Field | Meaning | Shown on the dashboard as |
 |---|---|---|
 | `duration` | Drive time **with current traffic** | Big number on each card |
-| `staticDuration` | Drive time **ignoring traffic** | "Normal 1h 23m" |
-| `duration − staticDuration` | Extra time caused by traffic | "+18m Heavy" badge |
+| `staticDuration` | Drive time on a **typical day at this hour** | "Usual 1h 23m" |
+| `duration − staticDuration` | How much slower (or faster) than usual it is right now | "+18m slower than usual" |
 | `destinationIndex` | Which resort the entry is for. Entries can arrive in any order. | n/a |
+
+> **Heads-up: "usual" isn't "empty roads."** Google's `staticDuration` already includes the traffic that's normal for this hour, so at rush hour both numbers can match even on busy roads. The card then says "Typical for this time". To see actual congestion, tap a resort. The colored route line, and the "On the road now: 2.4 mi slow" line on its card, come from Google's road-speed data.
 
 - **Field mask:** This header is required. It tells Google exactly which fields to return. Smaller responses are faster, and some fields cost more.
 - **`TRAFFIC_AWARE_OPTIMAL`:** Uses live and historical traffic, the same quality as the Google Maps app. With no `departureTime`, Google assumes "leaving now."

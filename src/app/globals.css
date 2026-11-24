@@ -734,6 +734,29 @@ code {
 .traffic-black {
   color: #fed7aa;
 }
+/* Actual congestion on the tapped resort's route */
+.congestion {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.congestion-slow {
+  color: var(--alpenglow);
+}
+.congestion-jam {
+  color: #f87171;
+}
+.congestion-clear {
+  color: var(--trail-green);
+}
+.legend-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
 .resort-time {
   flex: none;
   text-align: right;

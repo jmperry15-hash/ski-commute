@@ -6,7 +6,7 @@
 import { useEffect } from "react";
 import { AdvancedMarker, ColorScheme, Map as GoogleMap, Polyline, useMap } from "@vis.gl/react-google-maps";
 import { BROWSER_KEY } from "@/lib/config";
-import { formatDuration, formatMiles } from "@/lib/format";
+import { congestedMiles, congestionText, formatDuration, formatMiles } from "@/lib/format";
 import type { TrafficRoute, TrafficSpeed } from "@/lib/types";
 
 // Route line colors, like Google Maps: blue = moving normally, orange = slow, red = jammed.
@@ -149,7 +149,7 @@ function RoutePanel({ state }: { state: RouteState }) {
   } else if (state.status === "error") {
     body = <span className="route-hint route-error">{state.message}</span>;
   } else {
-    const slow = state.route.segments.filter((s) => s.speed !== "NORMAL").length;
+    const congestion = congestionText(congestedMiles(state.route));
     body = (
       <>
         <div className="route-title">
@@ -159,7 +159,7 @@ function RoutePanel({ state }: { state: RouteState }) {
           </span>
         </div>
         <div className="route-summary">
-          {slow === 0 ? "No slowdowns on this route" : `${slow} slow stretch${slow === 1 ? "" : "es"} on this route`}
+          {congestion ? `${congestion} on this route` : "No slowdowns on this route"}
         </div>
         <div className="route-legend">
           <span>
